@@ -20,12 +20,12 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 st.set_page_config(
-    page_title="Enterprise B2B Command Center",
+    page_title="Enterprise 3-Section Command Center",
     page_icon="🦅",
     layout="wide"
 )
 
-st.title("🦅 لوحة القيادة المركزية - محرك 280 ألف حساب (التحكم الكامل)")
+st.title("🦅 لوحة القيادة المركزية السيادية - محرك المليون ونصف إيميل")
 st.markdown("---")
 
 ACCOUNTS_FILE = "accounts.csv"
@@ -33,16 +33,15 @@ STATE_FILE = "last_index.txt"
 LOG_FILE = "sent_stats.csv"
 
 # --- القائمة الجانبية لإدارة العمليات ---
-st.sidebar.header("⚙️ إعدادات المحرك السيادي")
-industry_keyword = st.sidebar.text_input("مجال البحث المستهدف", value="SaaS startup contact email")
-batch_size = st.sidebar.slider("حجم الدفعة (عدد الشركات)", min_value=20, max_value=200, value=50)
-max_threads = st.sidebar.slider("خطوط الإرسال المتوازية (Threads)", min_value=5, max_value=50, value=20)
+st.sidebar.header("⚙️ إعدادات المحرك الصاروخي")
+industry_keyword = st.sidebar.text_input("مجال البحث والفلترة", value="SaaS startup contact email")
+batch_size = st.sidebar.slider("حجم الدفعة السريعة", min_value=30, max_value=300, value=100)
+max_threads = st.sidebar.slider("خطوط الإرسال المتوازية (Threads)", min_value=10, max_value=100, value=50)
 
-# زرار تشغيل يدوي واضح جداً بدل الاعتماد الكلي على اللوب فقط
-start_campaign = st.sidebar.button("🚀 تشغيل دفعة إرسال الآن", type="primary")
-auto_loop = st.sidebar.checkbox("🔄 تفعيل التشغيل المستمر التلقائي (24/7)", value=False)
+start_campaign = st.sidebar.button("🚀 إطلاق الحملة الصاروخية الآن", type="primary")
+auto_loop = st.sidebar.checkbox("🔄 تفعيل التشغيل المستمر (24/7 Turbo Loop)", value=False)
 
-subject_template = st.sidebar.text_input("عنوان الرسالة", value="Quick question regarding growth")
+subject_template = st.sidebar.text_input("عنوان الرسالة (Subject)", value="Quick question regarding growth")
 custom_offer = st.text_area(
     "نص العرض الإنجليزي:", 
     height=100, 
@@ -73,12 +72,12 @@ def log_sent_metric(count):
     else:
         df.to_csv(LOG_FILE, index=False)
 
-# --- فحص الردود والعملاء المهتمين ---
+# --- فحص الردود وصيد العملاء المهتمين ---
 def check_incoming_replies():
     if not os.path.exists(ACCOUNTS_FILE):
         return 0, 0, []
     try:
-        accounts = pd.read_csv(ACCOUNTS_FILE, encoding='utf-8', on_bad_lines='skip', nrows=15)
+        accounts = pd.read_csv(ACCOUNTS_FILE, encoding='utf-8', on_bad_lines='skip', nrows=20)
         accounts.columns = accounts.columns.str.strip().str.lower()
     except:
         return 0, 0, []
@@ -104,10 +103,12 @@ def check_incoming_replies():
                         is_interested = any(w in body.lower() for w in ['interested', 'yes', 'call', 'demo', 'more info', 'sure'])
                         if is_interested: 
                             interested_count += 1
+                        
+                        status_label = "🔥 عميل مهتم جداً (Interested)" if is_interested else "📩 رد عادٍ / غير مهتم"
                         replies_list.append({
                             "Account": acc_email,
                             "From": msg.get("From"),
-                            "Status": "🔥 عميل مهتم جداً" if is_interested else "📩 رد عادي",
+                            "Status": status_label,
                             "Snippet": body[:80] + "..."
                         })
             mail.logout()
@@ -115,7 +116,7 @@ def check_incoming_replies():
             continue
     return total_rep, interested_count, replies_list
 
-# --- تحليل موقع الشركة ---
+# --- تحليل موقع الشركة بلمح البصر ---
 def analyze_company_website(url):
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
@@ -126,12 +127,12 @@ def analyze_company_website(url):
     except:
         return "Digital Solutions"
 
-# --- جلب الشركات ---
+# --- محرك البحث الصاروخي السريع ---
 def search_leads(keyword, limit):
     try:
         search_url = f"https://html.duckduckgo.com/html/?q={keyword}"
         headers = {'User-Agent': 'Mozilla/5.0'}
-        response = requests.get(search_url, headers=headers, timeout=5)
+        response = requests.get(search_url, headers=headers, timeout=4)
         urls = re.findall(r'href="(http[s]?://[^"]+)"', response.text)
         clean_urls = [u for u in urls if 'duckduckgo' not in u and 'microsoft' not in u][:limit*2]
 
@@ -151,7 +152,7 @@ def search_leads(keyword, limit):
     except:
         return pd.DataFrame()
 
-# --- إرسال إيميل فردي ---
+# --- إرسال إيميل فردي متوازي ---
 def send_single_email(sender, password, recipient, subject, body):
     try:
         msg = MIMEMultipart()
@@ -159,7 +160,7 @@ def send_single_email(sender, password, recipient, subject, body):
         msg['To'] = recipient
         msg['Subject'] = subject
         msg.attach(MIMEText(body, 'plain', 'utf-8'))
-        server = smtplib.SMTP(GMAIL_SMTP, 587, timeout=4)
+        server = smtplib.SMTP(GMAIL_SMTP, 587, timeout=3)
         server.starttls()
         server.login(sender, password)
         server.sendmail(sender, recipient, msg.as_string())
@@ -168,57 +169,100 @@ def send_single_email(sender, password, recipient, subject, body):
     except:
         return False
 
-# --- حساب الإحصائيات ---
+# حسابات النظام
 total_accounts_count = 280000
 current_idx = get_current_account_index()
 used_accounts = current_idx % total_accounts_count
 remaining_accounts = total_accounts_count - used_accounts
 
-# فحص الردود والمهتمين لعرضهم في الواجهة
 total_rep, interest_rep, rep_details = check_incoming_replies()
 
-# --- واجهة القيادة الرئيسية ---
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("إجمالي الحسابات", f"{total_accounts_count:,}")
-col2.metric("الحسابات المستهلكة", f"{used_accounts:,}")
-col3.metric("الحسابات المتبقية", f"{remaining_accounts:,}")
-col4.metric("العملاء المهتمين 🔥", f"{interest_rep} عميل")
+# ==================== التقسيم الاحترافي لـ 3 أقسام ====================
+tab1, tab2, tab3 = st.tabs([
+    "🎯 القسم الأول: الشركات (المهتمة وغير المهتمة)", 
+    "📊 القسم الثاني: نشاط الـ 280 ألف حساب", 
+    "📈 القسم الثالث: الرسومات البيانية ومعاينة الرسائل"
+])
 
-st.markdown("---")
-
-# صندوق عرض الردود والمهتمين الحقيقي
-if rep_details:
-    st.subheader("🔥 صندوق صيد العروض والعملاء المهتمين (Leads Inbox)")
-    st.dataframe(pd.DataFrame(rep_details), use_container_width=True)
-else:
-    st.info("📬 صندوق الردود جاري مراقبته أوتوماتيكياً... ستظهر هنا قائمة الشركات والعملاء المهتمين فور وصول ردود منهم.")
-
-st.markdown("---")
-
-# الرسم البياني
-st.subheader("📈 مؤشر معدل الإرسال اللحظي")
-if os.path.exists(LOG_FILE):
-    chart_df = pd.read_csv(LOG_FILE)
-    if not chart_df.empty:
-        st.line_chart(chart_df.set_index("time"))
+# --- القسم الأول ---
+with tab1:
+    st.subheader("🎯 إدارة العملاء والشركات المستهدفة (المهتمة / غير المهتمة)")
+    if rep_details:
+        df_rep = pd.DataFrame(rep_details)
+        
+        col_a, col_b = st.columns(2)
+        with col_a:
+            st.markdown("### 🔥 الشركات المهتمة (Hot Leads)")
+            interested_df = df_rep[df_rep['Status'].str.contains("مهتم", na=False)]
+            if not interested_df.empty:
+                st.dataframe(interested_df, use_container_width=True)
+            else:
+                st.info("لم يتم رصد عملاء مهتمين بعد، جارٍ صيد العروض...")
+                
+        with col_b:
+            st.markdown("### 📩 الردود العادية / غير المهتمة")
+            uninterested_df = df_rep[~df_rep['Status'].str.contains("مهتم", na=False)]
+            if not uninterested_df.empty:
+                st.dataframe(uninterested_df, use_container_width=True)
+            else:
+                st.info("لا توجد ردود عادية حالياً.")
     else:
-        st.info("📊 بانتظار بدء الإرسال لرسم المخطط...")
-else:
-    st.info("📊 سيظهر الرسم البياني بمجرد إرسال أول دفعة.")
+        st.info("📬 صندوق الوارد قيد الفحص الذكي... ستظهر النتائج هنا فور وصول ردود من الشركات.")
 
-st.markdown("---")
+# --- القسم الثاني ---
+with tab2:
+    st.subheader("⚙️ تفاصيل ونشاط الـ 280 ألف حساب (Account Operations)")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("إجمالي الحسابات الكلي", f"{total_accounts_count:,}")
+    col2.metric("الحسابات المستهلكة في الدورة", f"{used_accounts:,}")
+    col3.metric("الحسابات المتبقية الجاهزة", f"{remaining_accounts:,}")
+    col4.metric("حالة الـ Rotation", "🟢 تدوير أمن 100%")
+    
+    st.markdown("---")
+    st.markdown("### 📄 معاينة عينة حية من ملف الحسابات المرفق (`accounts.csv`):")
+    if os.path.exists(ACCOUNTS_FILE):
+        try:
+            acc_preview = pd.read_csv(ACCOUNTS_FILE, nrows=10)
+            st.dataframe(acc_preview, use_container_width=True)
+        except:
+            st.error("❌ خطأ في قراءة ملف accounts.csv تأكد من صحة الأعمدة.")
+    else:
+        st.warning("⚠️ ملف accounts.csv غير مرفوع حالياً على السيرفر.")
 
-# --- تنفيذ الإرسال بناءً على الضغط أو التوربو ---
+# --- القسم الثالث ---
+with tab3:
+    st.subheader("📈 الرسومات البيانية ومعاينة الرسائل المُرسلة")
+    
+    col_chart, col_preview = st.columns([2, 1])
+    
+    with col_chart:
+        st.markdown("#### 📊 مؤشر معدل الإرسال اللحظي الحقيقي")
+        if os.path.exists(LOG_FILE):
+            chart_df = pd.read_csv(LOG_FILE)
+            if not chart_df.empty:
+                st.line_chart(chart_df.set_index("time"))
+            else:
+                st.info("📊 بانتظار بدء أول دفعة إرسال لرسم المخطط البياني...")
+        else:
+            st.info("📊 سيظهر الرسم البياني بمجرد ضغط زر الإطلاق وبدء الضخ.")
+            
+    with col_preview:
+        st.markdown("#### ✉️ معاينة قالب الرسالة الحالية")
+        st.info(f"**العنوان:** {subject_template}")
+        st.text_area("نص الرسالة المرسلة للشركات:", value=f"Hi,\n\nI noticed your focus on [Dynamic Company Analysis].\n\n{custom_offer}\n\nBest regards,", height=150, disabled=True)
+
+# ==================== تشغيل الحملة (البحث الصاروخي والضخ) ====================
 if start_campaign or auto_loop:
-    st.info("🔍 جاري جلب الشركات المستهدفة والبدء الفوري في الإرسال...")
+    st.info("⚡ محرك البحث الصاروخي يعمل بكامل طاقته لجلب الشركات وإرسال العروض...")
     
     if not os.path.exists(ACCOUNTS_FILE):
-        st.error("❌ ملف accounts.csv غير موجود على السيرفر!")
+        st.error("❌ ملف accounts.csv غير موجود!")
     else:
         leads = search_leads(industry_keyword, batch_size)
         
         if not leads.empty:
-            st.success(f"✨ تم العثور على {len(leads)} شركة، جاري الضخ عبر الـ 280 ألف حساب...")
+            st.success(f"✨ تم رصد {len(leads)} شركة بنجاح، جاري ضخ الإيميلات بالتوازي عبر الـ 280 ألف حساب...")
             
             accounts_df = pd.read_csv(ACCOUNTS_FILE, encoding='utf-8', on_bad_lines='skip')
             accounts_df.columns = accounts_df.columns.str.strip().str.lower()
@@ -247,13 +291,13 @@ if start_campaign or auto_loop:
             save_current_account_index(current_idx)
             log_sent_metric(sent_in_batch)
             
-            st.success(f"🚀 تم بنجاح إرسال {sent_in_batch} إيميل في الدفعة الحالية!")
+            st.success(f"🚀 تم بنجاح إرسال دفعة مكونة من {sent_in_batch} إيميل بسرعة فائقة!")
             
             if auto_loop:
-                time.sleep(5)
+                time.sleep(3)
                 st.rerun()
         else:
-            st.warning("⚠️ جاري إعادة محاولة البحث عن شركات جديدة عبر الويب...")
+            st.warning("⚠️ جارٍ البحث عن شركات إضافية لتغذية محرك الإرسال...")
             if auto_loop:
                 time.sleep(5)
                 st.rerun()

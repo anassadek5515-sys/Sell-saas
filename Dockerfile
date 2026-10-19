@@ -9,7 +9,6 @@ COPY . .
 
 EXPOSE 8501
 
-# مسح المتغير المعفن اللي بيعمل المشكلة وإجبار Streamlit على العمل
 ENV STREAMLIT_SERVER_PORT=8501
 ENV STREAMLIT_SERVER_ADDRESS=0.0.0.0
 

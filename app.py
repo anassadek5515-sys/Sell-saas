@@ -19,13 +19,11 @@ st.markdown("---")
 
 ACCOUNTS_FILE = "accounts.csv"
 
-# التحقق من وجود ملف الحسابات
 if os.path.exists(ACCOUNTS_FILE):
-    st.sidebar.success("✅ ملف الحسابات متصل بنجاح من GitHub")
+    st.sidebar.success("✅ ملف الحسابات متصل بنجاح")
 else:
-    st.sidebar.error("⚠️ ملف accounts.csv غير موجود على GitHub!")
+    st.sidebar.error("⚠️ ملف accounts.csv غير موجود!")
 
-# إعدادات الحملة
 st.sidebar.header("⚙️ إعدادات الحملة")
 industry_keyword = st.sidebar.text_input("مجال البحث عن الشركات", value="software development companies contact email")
 batch_size = st.sidebar.slider("عدد الإيميلات في الدفعة الواحدة", min_value=5, max_value=50, value=10)
@@ -37,7 +35,6 @@ email_body = st.text_area("محتوى الرسالة:", height=150, value="مر�
 GMAIL_SERVER = "smtp.gmail.com"
 GMAIL_PORT = 587
 
-# دالة البحث عن الإيميلات
 def search_leads(keyword, limit):
     try:
         search_url = f"https://html.duckduckgo.com/html/?q={keyword}"
@@ -62,7 +59,6 @@ def search_leads(keyword, limit):
         st.error(f"خطأ في البحث: {e}")
         return pd.DataFrame()
 
-# دالة إرسال الإيميل
 def send_email(sender, password, recipient, subject, body):
     try:
         msg = MIMEMultipart()

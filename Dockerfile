@@ -9,5 +9,5 @@ COPY . .
 
 EXPOSE 8501
 
-# استخدام صدفة (Shell) لتمرير رقم الـ PORT بشكل صحيح لـ Streamlit
-CMD sh -c "streamlit run app.py --server.port=${PORT:-8501} --server.address=0.0.0.0"
+# استخدام البورت المخصص من Railway أو الافتراضي 8501
+CMD exec streamlit run app.py --server.port=${PORT:-8501} --server.address=0.0.0.0

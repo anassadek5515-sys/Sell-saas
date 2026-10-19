@@ -9,8 +9,8 @@ COPY . .
 
 EXPOSE 8501
 
-# إلغاء أي متغير بيئي مزعج وتشغيل Streamlit بقيمة صحيحة 100%
+# مسح المتغير المعفن اللي بيعمل المشكلة وإجبار Streamlit على العمل
 ENV STREAMLIT_SERVER_PORT=8501
 ENV STREAMLIT_SERVER_ADDRESS=0.0.0.0
 
-CMD ["streamlit", "run", "app.py"]
+CMD unset STREAMLIT_SERVER_PORT && streamlit run app.py

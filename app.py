@@ -25,7 +25,7 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("🦅 لوحة القيادة السيادية الخارقة - محرك المليون ونصف إيميل (الإصدار الأسطوري)")
+st.title("🦅 لوحة القيادة السيادية الخارقة - محرك الإرسال المرتب")
 st.markdown("---")
 
 ACCOUNTS_FILE = "accounts.csv"
@@ -197,9 +197,9 @@ def send_single_email(sender, password, recipient, subject, body):
             else:
                 df_fu.to_csv(FOLLOWUP_FILE, index=False)
 
-        return True, f"✅ تم الإرسال بذكاء إلى [{recipient}] عبر الحساب [{sender}]"
+        return True, f"✅ تم الإرسال بنجاح إلى: **{recipient}** (عبر الحساب: `{sender}`)"
     except Exception as e:
-        return False, f"❌ فشل إرسال الإيميل إلى [{recipient}]"
+        return False, f"❌ فشل إرسال الإيميل إلى: **{recipient}**"
 
 # --- الحسابات والإحصائيات ---
 total_accounts_count = 280000
@@ -281,7 +281,7 @@ if start_now or auto_loop:
             leads = search_leads(industry_keyword, batch_size)
         
         if not leads.empty:
-            st.success(f"✨ تم تجهيز {len(leads)} شركة مستهدفة بنجاح بالذكاء الاصطناعي، شاهد البث الحي أدناه:")
+            st.success(f"✨ تم تجهيز {len(leads)} شركة مستهدفة بنجاح بالذكاء الاصطناعي، شاهد سجلات البث الحي أدناه:")
             
             accounts_df = pd.read_csv(ACCOUNTS_FILE, encoding='utf-8', on_bad_lines='skip')
             accounts_df.columns = accounts_df.columns.str.strip().str.lower()
@@ -299,24 +299,31 @@ if start_now or auto_loop:
                 
                 tasks.append((sender, pwd, target, subject_template, body))
             
-            log_container = st.empty()
-            live_logs_text = "🚀 بدء ضخ الحملة الذكية الشاملة...\n"
+            # حاوية عرض مرتبة ومنفصلة لكل سطر إرسال لعدم تداخل الكلام
+            st.markdown("### 📋 البث الحي للعمليات (Live AI Console):")
+            log_placeholder = st.container()
             
             sent_in_batch = 0
+            live_messages = []
+            
             with ThreadPoolExecutor(max_workers=max_threads) as executor:
                 futures = [executor.submit(send_single_email, t[0], t[1], t[2], t[3], t[4]) for t in tasks]
                 for future in as_completed(futures):
                     success, message = future.result()
                     if success:
                         sent_in_batch += 1
-                    live_logs_text += message + "\n"
-                    log_container.text_area("📋 البث الحي للعمليات (Live AI Console):", value=live_logs_text, height=220)
+                    live_messages.append(message)
+                    
+                    # عرض النتائج مرتبة سطر بسطر داخل الصندوق المنظم
+                    with log_placeholder:
+                        for msg in live_messages[-10:]:  # عرض آخر 10 رسائل بنظام سطر جديد مرتب
+                            st.markdown(msg)
             
             save_current_account_index(current_idx)
             log_sent_metric(sent_in_batch)
             
             st.balloons()
-            st.success(f"🎉 تم بنجاح إرسال دفعة مكونة من {sent_in_batch} إيميل مخصص بالذكاء الاصطناعي مع تفعيل المتابعة والفحص!")
+            st.success(f"🎉 تم بنجاح إرسال دفعة مكونة من {sent_in_batch} إيميل مخصص بالذكاء الاصطناعي وعرضها قدام عينك بوضوح!")
             
             if auto_loop:
                 time.sleep(5)

@@ -1,57 +1,71 @@
 import sqlite3
 import imaplib
 import email
-from email.header import decode_header
 import os
 
-# --- 1. إعدادات البريد المركزي أو حساب الإرسال ---
-IMAP_SERVER = os.environ.get("IMAP_SERVER", "imap.gmail.com")
-IMAP_USER = os.environ.get("EMAIL_USER", "your_email@gmail.com")
-IMAP_PASS = os.environ.get("EMAIL_PASS", "your_app_password")
-
+# --- الإعدادات الأساسية ---
 DB_FILE = "companies.db"
 
-def process_inbox():
+# بيانات استقبال البريد (IMAP) - سحب من متغيرات البيئة أو جيت هب
+IMAP_SERVER = os.environ.get("IMAP_SERVER", "imap.gmail.com")
+IMAP_PORT = 993  # البورت الصحيح والآمن لاستقبال الإيميلات عبر SSL
+SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "your_email@gmail.com")
+SENDER_PASSWORD = os.environ.get("SENDER_PASSWORD", "your_app_password")
+
+def check_inbox_replies():
+    """
+    فحص البريد الوارد للبحث عن ردود من الشركات وتحديث حالتها في قاعدة البيانات
+    """
     if not os.path.exists(DB_FILE):
         print("⚠️ قاعدة البيانات غير موجودة محلياً!")
         return
 
     try:
-        # الاتصال بسيرفر البريد عبر IMAP
-        mail = imaplib.IMAP4_SSL(IMAP_SERVER)
-        mail.login(IMAP_USER, IMAP_PASS)
+        # الاتصال بسيرفر IMAP باستخدام SSL والبورت الصحيح 993
+        print("🔍 جاري الاتصال بسيرفر البريد لفحص الردود...")
+        mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT)
+        mail.login(SENDER_EMAIL, SENDER_PASSWORD)
+        
+        # فتح صندوق الوارد (Inbox)
         mail.select("inbox")
 
-        # البحث عن كافة الرسائل غير المقروءة (UNSEEN)
+        # البحث عن كل الرسائل غير المقروءة أو كل الرسائل الواردة
         status, messages = mail.search(None, 'UNSEEN')
-        email_ids = messages[0].split()
-
-        if not email_ids:
-            print("✅ لا توجد ردود جديدة غير مقروءة حالياً.")
+        
+        if status != 'OK':
+            print("ℹ️ لم يتم العثور على رسائل جديدة.")
+            mail.logout()
             return
 
-        print(f"📩 تم العثور على {len(email_ids)} رسالة جديدة! جاري الفحص والتحديث...")
+        email_ids = messages[0].split()
+        if not email_ids:
+            print("📭 لا توجد ردود جديدة في صندوق الوارد حالياً.")
+            mail.logout()
+            return
+
+        print(جاري فحص {len(email_ids)} رسالة جديدة...)
 
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
 
-        # التأكد من وجود أعمدة الردود في قاعدة البيانات
-        cursor.execute("PRAGMA table_info(companies)")
-        columns = [column[1] for column in cursor.fetchall()]
-        if 'reply_text' not in columns:
-            cursor.execute("ALTER TABLE companies ADD COLUMN reply_text TEXT")
-
         for e_id in email_ids:
-            _, msg_data = mail.fetch(e_id, '(RFC822)')
+            res, msg_data = mail.fetch(e_id, '(RFC822)')
             for response_part in msg_data:
                 if isinstance(response_part, tuple):
                     msg = email.message_from_bytes(response_part[1])
                     
-                    # استخراج إيميل الراسل
-                    from_header = msg.get("From")
-                    sender_email = email.utils.parseaddr(from_header)[1].lower()
+                    # استخراج إيميل المرسل وصندوق الموضوع
+                    from_header = msg.get('From')
+                    subject_header = msg.get('Subject', '')
+                    
+                    # استخراج البريد الصافي للمرسل
+                    sender_email = ""
+                    if '<' in from_header and '>' in from_header:
+                        sender_email = from_header.split('<')[1].split('>')[0].strip()
+                    else:
+                        sender_email = from_header.strip()
 
-                    # استخراج محتوى الرسالة
+                    # استخراج نص الرسالة (Body)
                     body = ""
                     if msg.is_multipart():
                         for part in msg.walk():
@@ -67,25 +81,29 @@ def process_inbox():
                         except:
                             pass
 
-                    # البحث في قاعدة البيانات عن الإيميل وتحديث حالته
-                    cursor.execute("SELECT id FROM companies WHERE email = ?", (sender_email,))
-                    row = cursor.fetchone()
+                    # مطابقة الإيميل الوارد مع الشركات المسجلة في قاعدة البيانات
+                    cursor.execute("SELECT id, name FROM companies WHERE email = ?", (sender_email,))
+                    lead = cursor.fetchone()
 
-                    if row:
+                    if lead:
+                        lead_id, company_name = lead[0], lead[1]
+                        
+                        # تحديث الحالة إلى Replied وحفظ نص الرد
                         cursor.execute("""
                             UPDATE companies 
                             SET status = 'Replied', reply_text = ? 
-                            WHERE email = ?
-                        """, (body.strip()[:1000], sender_email))
-                        print(f"🎯 تم اكتشاف رد من الشركة: {sender_email} وتحديث الحالتين بنجاح!")
+                            WHERE id = ?
+                        """, (body[:500], lead_id)) # حفظ أول 500 حرف من الرد كحد أقصى
+                        conn.commit()
+                        
+                        print(f"🎉 تم العثور على رد من الشركة: {company_name} ({sender_email})!")
 
-        conn.commit()
         conn.close()
         mail.logout()
-        print("🚀 اكتملت عملية معالجة الردود بنجاح!")
+        print("✨ انتهى فحص الردود بنجاح!")
 
     except Exception as e:
-        print(f"❌ خطأ أثناء الاتصال بمزود البريد: {e}")
+        print(f"❌ خطأ أثناء الاتصال بمزود البريد لفحص الردود: {e}")
 
 if __name__ == "__main__":
-    process_inbox()
+    check_inbox_replies()

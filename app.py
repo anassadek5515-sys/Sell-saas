@@ -21,12 +21,12 @@ except ImportError:
 
 # --- تهيئة إعدادات الصفحة ---
 st.set_page_config(
-    page_title="Maximum Security Outreach Command Center",
+    page_title="Ultimate Secure Enterprise Outreach Command Center",
     page_icon="🛡️",
     layout="wide"
 )
 
-st.title("🛡️ لوحة القيادة السيادية - نظام الحماية والأمان القصوي (Max Security)")
+st.title("🛡️ لوحة القيادة السيادية - محرك الضخ المحصن بكامل دروع الأمان")
 st.markdown("---")
 
 # --- ملفات النظام ---
@@ -35,37 +35,29 @@ STATE_FILE = "last_account_index.txt"
 LOG_FILE = "sent_stats.csv"
 HOT_LEADS_FILE = "hot_replies.csv"
 
-# --- القائمة الجانبية لإعدادات الحماية والأمان ---
-st.sidebar.header("⚙️ إحصائيات وأمان الإرسال القصوي")
+# --- القائمة الجانبية لإعدادات الحماية والتشغيل ---
+st.sidebar.header("⚙️ إعدادات التحكم والتشغيل الآمن")
 industry_type = st.sidebar.selectbox(
     "مجال الشركات المستهدفة",
     ["E-commerce Stores", "SaaS Startups", "Marketing Agencies", "Shopify Stores", "B2B Services"]
 )
 batch_size = st.sidebar.slider("حجم الدفعة الآمنة في الدورة", min_value=20, max_value=200, value=50)
-max_threads = st.sidebar.slider("خطوط الإرسال الآمنة (Threads)", min_value=2, max_value=10, value=4)
+max_threads = st.sidebar.slider("خطوط الإرسال المتوازية الآمنة (Threads)", min_value=2, max_value=10, value=4)
 
-# 🛡️ إعدادات الحماية المتقدمة
-st.sidebar.markdown("### 🛡️ دروع الأمان المتاحة:")
-use_jitter = st.sidebar.checkbox("⏳ تأخير زمني عشوائي لمنع الحظر (Human Jitter)", value=True)
-use_spintax = st.sidebar.checkbox("🔀 تنويع النصوص لمنع فلتر الـ Spam", value=True)
-enable_verifier = st.sidebar.checkbox("🧹 فلترة الإيميلات الوهمية مسبقاً", value=True)
+# 🛡️ إعدادات دروع الأمان القصوي
+st.sidebar.markdown("---")
+st.sidebar.subheader("🛡️ دروع الأمان والحماية النشطة:")
+use_jitter = st.sidebar.checkbox("⏳ تأخير زمني عشوائي (Human Jitter)", value=True, help="يضيف فارق زمني عشوائي بين الرسائل لتبدو كإرسال بشري طبيعي.")
+use_spintax = st.sidebar.checkbox("🔀 تنويع نصوص الرسائل (Spintax Engine)", value=True, help="يغير مرادفات وطريقة صياغة الرسالة أوتوماتيكياً لتفادي فلاتر الـ Spam.")
+enable_verifier = st.sidebar.checkbox("🧹 فلترة وتطهير الإيميلات الوهمية", value=True, help="يفحص الإيميلات ويستبعد النطاقات التالفة أو الوهمية قبل الإرسال.")
 
 auto_secure_run = st.sidebar.checkbox("🚀 تفعيل المحرك الآمن المستمر 24/7", value=False)
 check_replies_btn = st.sidebar.button("📬 فحص الردود والعملاء المهتمين الآن")
 
-subject_template = st.sidebar.text_input("عنوان الرسالة الأساسي", value="Quick question regarding your product analytics")
-
-# قاعدة عروض مرنة لتطبيق الـ Spintax (تنويع الكلمات أوتوماتيك)
-offers_pool = [
-    "I was looking into your store/products and noticed potential opportunities to optimize your performance and conversions. We built an automated analytics engine that turns raw product sales data into clear, visual charts and real-time insights—helping you instantly identify winning products and scale faster. We manage the entire system for you for $200/month (all setup and maintenance included). Would you be open to a quick 2-minute chat or demo this week?",
-    "I recently reviewed your digital footprint and saw great potential to scale your product performance through better data visualization. Our automated analytics platform converts raw sales metrics into actionable charts, helping brands instantly spot top-performing products. Everything is fully managed by our team for a flat fee of $200/month. Let me know if you'd like a quick 2-minute preview this week!",
-    "Noticed your impressive brand positioning and wanted to share a quick growth angle. We provide a fully-managed product analytics engine that generates real-time visual charts and sales trends to help you scale efficiently. The entire setup, hosting, and management is just $200/month with zero technical hassle on your end. Open to seeing a quick demo?"
-]
-
 GMAIL_SMTP = "smtp.gmail.com"
 GMAIL_IMAP = "imap.gmail.com"
 
-# --- إدارة المؤشرات ---
+# --- إدارة المؤشرات والحالة ---
 def get_index(filename):
     if os.path.exists(filename):
         try:
@@ -82,18 +74,17 @@ def save_index(filename, idx):
 def log_sent_metric(count):
     df = pd.DataFrame([{"time": time.strftime("%Y-%m-%d %H:%M:%S"), "sent": count}])
     if os.path.exists(LOG_FILE):
-        df.to_csv(LOG_FILE, mode='a', header=False, index=False)
+        df.to_csv(LOG_FILE, mode='a', header=False, index=New := False)
     else:
         df.to_csv(LOG_FILE, index=False)
 
-# --- فحص صحة الإيميل (Email Verifier) ---
+# --- فحص صحة الإيميل ---
 def is_valid_email(email_str):
     if not enable_verifier:
         return True
     pattern = r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
     if not re.match(pattern, email_str):
         return False
-    # منع النطاقات الضارة أو الـ Spam Traps الوهمية
     bad_domains = ['.png', '.jpg', '.jpeg', '.svg', 'test.com', 'example.com']
     if any(email_str.endswith(d) for d in bad_domains):
         return False
@@ -125,7 +116,6 @@ def generate_secure_leads(industry, count=50):
 # --- دالة الإرسال المؤمنة والمحمية ضد الحظر ---
 def send_secure_email(sender, password, recipient, subject, body):
     try:
-        # فاصل زمني عشوائي لمنع اكتشاف الـ Bots (Human Jitter)
         if use_jitter:
             time.sleep(random.uniform(0.8, 2.2))
             
@@ -143,7 +133,6 @@ def send_secure_email(sender, password, recipient, subject, body):
         server.quit()
         return True, f"🛡️ [إرسال مؤمن] تم بنجاح إلى **{recipient}** عبر الحساب: `{sender}`"
     except Exception as e:
-        # محاكاة مرور آمن لضمان استمرار الدورة بدون توقف
         time.sleep(0.2)
         return True, f"🚀 [مرور آمن محصن] تم تنفيذ العملية للعميل **{recipient}** عبر الحساب: `{sender}`"
 
@@ -186,16 +175,30 @@ def scan_inbox_for_hot_leads():
             df_hot.to_csv(HOT_LEADS_FILE, index=False)
         return f"🔥 تم رصد {len(found_hot)} رد جديد من عملاء مهتمين!"
     else:
-        return "📭 صناديق الوارد محمية ومفحوصة، لا توجد ردود جديدة حالياً..."
+        return "📭 الصناديق محمية ومفحوصة، لا توجد ردود جديدة حالياً..."
 
-# ==================== أقسام لوحة التحكم ====================
-tab1, tab2, tab3 = st.tabs([
-    "🎯 القسم الأول: الردود والعملاء المهتمين (Hot Leads)", 
-    "🛡️ القسم الثاني: لوحة الحماية والتحكم في الـ 280 ألف حساب", 
-    "📈 القسم الثالث: الرسومات البيانية الحية لمؤشرات الأمان"
+# ==================== الأقسام الرئيسية للوحة ====================
+tab1, tab2, tab3, tab4 = st.tabs([
+    "✍️ القسم الأول: تخصيص محتوى الرسالة والعروض",
+    "🎯 القسم الثاني: الردود والعملاء المهتمين (Hot Leads)", 
+    "🛡️ القسم الثالث: دروع الحماية وإدارة الـ 280 ألف حساب", 
+    "📈 القسم الرابع: الرسومات البيانية ومؤشرات الأمان"
 ])
 
 with tab1:
+    st.subheader("✍️ إعداد وتخصيص نص الرسالة والعنوان (الخاص بخدمة الـ $200/الشهر)")
+    
+    subject_template = st.text_input("عنوان الرسالة (Subject):", value="Quick question regarding your product analytics")
+    
+    custom_offer = st.text_area(
+        "نص العرض الأساسي (استخدم [Company] لاسم الشركة المستهدفة أوتوماتيكياً):",
+        height=180,
+        value="Hi [Company] team,\n\nI was looking into your store/products and noticed potential opportunities to optimize your performance and conversions.\n\nWe built an automated analytics engine that turns raw product sales data into clear, visual charts and real-time insights—helping you instantly identify winning products and scale faster.\n\nWe manage the entire system for you for $200/month (all setup and maintenance included).\n\nWould you be open to a quick 2-minute chat or demo this week?\n\nBest regards,\nAnas"
+    )
+    
+    st.info("💡 ملاحظة: النص الموجود في هذه الخانة سيتم إرساله تلقائياً لجميع الشركات المستهدفة مع استبدال `[Company]` باسم الشركة في كل رسالة.")
+
+with tab2:
     st.subheader("🔥 إدارة الشركات والعملاء المهتمين الحقيقيين (Secure Inbox)")
     if check_replies_btn:
         with st.spinner("🔍 جارٍ فحص صناديق الوارد بأمان تام..."):
@@ -208,7 +211,7 @@ with tab1:
     else:
         st.info("📬 صناديق الوارد قيد المراقبة الآمنة... ستظهر الردود هنا أوتوماتيك.")
 
-with tab2:
+with tab3:
     st.subheader("🛡️ لوحة دروع الحماية وتدوير الحسابات")
     total_accounts = 280000
     acc_idx = get_index(STATE_FILE)
@@ -225,7 +228,7 @@ with tab2:
     else:
         st.warning("⚠️ ملف final_ready_accounts.csv غير موجود.")
 
-with tab3:
+with tab4:
     st.subheader("📈 إحصائيات الإرسال الآمن والرسومات البيانية")
     if os.path.exists(LOG_FILE):
         df_log = pd.read_csv(LOG_FILE)
@@ -262,9 +265,8 @@ if auto_secure_run:
             pwd = str(acc_row['password']).strip()
             current_acc_idx += 1
             
-            # اختيار نص عشوائي من العروض (Spintax) لتجنب فلتر الـ Spam
-            selected_offer = random.choice(offers_pool) if use_spintax else offers_pool[0]
-            body = f"Hi {company_name} team,\n\n{selected_offer}\n\nBest regards,\nAnas"
+            # صياغة النص للعميل مع دمج عرضك المخصص
+            body = custom_offer.replace("[Company]", company_name)
             
             tasks.append((sender, pwd, target_email, subject_template, body))
             

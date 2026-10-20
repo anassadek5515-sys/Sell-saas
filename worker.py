@@ -8,7 +8,7 @@ import concurrent.futures
 # --- الإعدادات الأساسية ---
 DB_FILE = "companies.db"
 
-# بيانات سيرفر الإرسال (SMTP) - يتم سحبها من البيئة أو ضبطها هنا
+# بيانات سيرفر الإرسال (SMTP) - يتم سحبها من البيئة في جيت هب
 SMTP_SERVER = os.environ.get("SMTP_SERVER", "smtp.gmail.com")
 SMTP_PORT = int(os.environ.get("SMTP_PORT", 587))
 SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "your_email@gmail.com")
@@ -19,11 +19,11 @@ MAX_THREADS = 10
 
 def send_email(lead):
     """
-    وظيفة إرسال الإيميل لشركة واحدة وتحديث حالتها
+    وظيفة إرسال الإيميل لشركة واحدة وتحديث حالتها في قاعدة البيانات
     """
     lead_id, company_name, recipient_email = lead[0], lead[1], lead[2]
     
-    # نص الإيميل التسويقي الاحترافي (Cold Outreach)
+    # نص الإيميل التسويقي الاحترافي لمنتج تحليل المنتجات (200$ شهرياً)
     subject = f"Quick question regarding your product analytics, {company_name}"
     
     body = f"""Hi there,
@@ -80,7 +80,19 @@ def run_worker():
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
 
-    # سحب الشركات التي حالتها Ready
+    # التأكد من إنشاء الجدول بالأعمدة الصحيحة تماماً لمنع أي خطأ
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS companies (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT,
+            email TEXT,
+            status TEXT DEFAULT 'Ready',
+            reply_text TEXT
+        )
+    """)
+    conn.commit()
+
+    # سحب الشركات التي حالتها Ready فقط
     cursor.execute("SELECT id, name, email FROM companies WHERE status = 'Ready' LIMIT 50")
     leads = cursor.fetchall()
     conn.close()

@@ -22,5 +22,3 @@ jobs:
 
       - name: Run worker script
         run: python worker.py
-        env:
-          PYTHONUNBUFFERED: "1"

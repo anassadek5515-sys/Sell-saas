@@ -15,7 +15,7 @@ SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "your_email@gmail.com")
 SENDER_PASSWORD = os.environ.get("SENDER_PASSWORD", "your_app_password")
 
 # عدد الخيوط لتسريع الإرسال بالتوازي
-MAX_THREADS = 10
+MAX_THREADS = 5
 
 def send_email(lead):
     """
@@ -48,8 +48,8 @@ Founder & CEO
     msg.attach(MIMEText(body, 'plain', 'utf-8'))
 
     try:
-        # الاتصال بالسيرفر وإرسال الرسالة
-        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+        # فتح اتصال جديد ومستقل لكل إيميل لتفادي انقطاع الاتصال المفاجئ
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=30)
         server.starttls()
         server.login(SENDER_EMAIL, SENDER_PASSWORD)
         server.send_message(msg)
@@ -92,7 +92,7 @@ def run_worker():
     """)
     conn.commit()
 
-    # 2. فحص ذكي: التأكد هل عمود name موجود فعلاً في الجدول القديم ولا لأ، ولو مش موجود بنضيفه أوتوماتيك
+    # 2. فحص ذكي: التأكد هل عمود name موجود ولا لأ، ولو مش موجود بنضيفه أوتوماتيك
     cursor.execute("PRAGMA table_info(companies);")
     columns = [col[1] for col in cursor.fetchall()]
     
@@ -102,10 +102,10 @@ def run_worker():
             conn.commit()
             print("🔧 تم إضافة عمود 'name' المفقود أوتوماتيكياً بنجاح!")
         except Exception as ex:
-            print(f"⚠️ خطأ أثناء محطة إضافة العمود: {ex}")
+            print(f"⚠️ خطأ أثناء إضافة العمود: {ex}")
 
     # سحب الشركات التي حالتها Ready فقط
-    cursor.execute("SELECT id, name, email FROM companies WHERE status = 'Ready' LIMIT 50")
+    cursor.execute("SELECT id, name, email FROM companies WHERE status = 'Ready' LIMIT 30")
     leads = cursor.fetchall()
     conn.close()
 
@@ -115,7 +115,7 @@ def run_worker():
 
     print(f"🚀 بدء معالجة إرسال {len(leads)} إيميل...")
 
-    # تشغيل الإرسال المتوازي باستخدام Multi-threading
+    # تشغيل الإرسال بالتوازي
     with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_THREADS) as executor:
         executor.map(send_email, leads)
 

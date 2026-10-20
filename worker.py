@@ -14,18 +14,14 @@ SMTP_PORT = int(os.environ.get("SMTP_PORT", 587))
 SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "your_email@gmail.com")
 SENDER_PASSWORD = os.environ.get("SENDER_PASSWORD", "your_app_password")
 
-def run_worker():
+def init_db():
     """
-    سحب الـ Leads الجاهزة وإرسالها بشكل متسلسل وآمن لمنع الحظر
+    إنشاء قاعدة البيانات والجدول أوتوماتيكياً لو مش موجودين، وإضافة عينة تجريبية للاختبار
     """
-    if not os.path.exists(DB_FILE):
-        print("⚠️ قاعدة البيانات غير موجودة محلياً!")
-        return
-
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
 
-    # 1. التأكد من إنشاء الجدول لو مش موجود أصلاً
+    # إنشاء الجدول بالهيكل السليم
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS companies (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -37,19 +33,32 @@ def run_worker():
     """)
     conn.commit()
 
-    # 2. فحص ذكي لعمود name
-    cursor.execute("PRAGMA table_info(companies);")
-    columns = [col[1] for col in cursor.fetchall()]
-    if 'name' not in columns:
-        try:
-            cursor.execute("ALTER TABLE companies ADD COLUMN name TEXT;")
-            conn.commit()
-            print("🔧 تم إضافة عمود 'name' المفقود أوتوماتيكياً بنجاح!")
-        except Exception as ex:
-            print(f"⚠️ خطأ أثناء إضافة العمود: {ex}")
+    # فحص لو الجدول فاضي خالص، نضيف إيميل تجريبي عشان تجرب بيه النظام
+    cursor.execute("SELECT COUNT(*) FROM companies;")
+    count = cursor.fetchone()[0]
+    
+    if count == 0:
+        print("💡 قاعدة البيانات كانت فارغة، تم إضافة عميل تجريبي للاختبار...")
+        cursor.execute("""
+            INSERT INTO companies (name, email, status) 
+            VALUES (?, ?, ?)
+        """, ("Test Store", "your_test_email@example.com", "Ready"))
+        conn.commit()
 
-    # سحب عدد محدود (مثلاً 10 إيميلات في كل تشغيل لاختبار الأمان)
-    cursor.execute("SELECT id, name, email FROM companies WHERE status = 'Ready' LIMIT 10")
+    conn.close()
+
+def run_worker():
+    """
+    تشغيل الروبوت لسحب الإيميلات وإرسالها بأمان
+    """
+    # التأكد من إنشاء وتجهيز القاعدة
+    init_db()
+
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+
+    # سحب الإيميلات الجاهزة
+    cursor.execute("SELECT id, name, email FROM companies WHERE status = 'Ready' LIMIT 5")
     leads = cursor.fetchall()
     conn.close()
 
@@ -57,14 +66,13 @@ def run_worker():
         print("ℹ️ لا توجد إيميلات جديدة بحالة Ready جاهزة للإرسال حالياً.")
         return
 
-    print(f"🚀 بدء إرسال {len(leads)} إيميل بشكل آمن...")
+    print(f"🚀 بدء إرسال {len(leads)} إيميل...")
 
     for lead in leads:
         lead_id, company_name, recipient_email = lead[0], lead[1], lead[2]
         
-        # ضبط اسم الشركة افتراضياً لو فاضي
         if not company_name:
-            company_name = "your company"
+            company_name = "your store"
 
         subject = f"Quick question regarding your product analytics, {company_name}"
         body = f"""Hi there,
@@ -89,14 +97,14 @@ Founder & CEO
         msg.attach(MIMEText(body, 'plain', 'utf-8'))
 
         try:
-            # الاتصال وإرسال الرسالة
+            # الاتصال وإرسال البريد
             server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=30)
             server.starttls()
             server.login(SENDER_EMAIL, SENDER_PASSWORD)
             server.send_message(msg)
             server.quit()
 
-            # تحديث الحالة إلى Sent في قاعدة البيانات فوراً
+            # تحديث الحالة إلى Sent
             conn = sqlite3.connect(DB_FILE)
             cursor = conn.cursor()
             cursor.execute("UPDATE companies SET status = 'Sent' WHERE id = ?", (lead_id,))
@@ -104,9 +112,7 @@ Founder & CEO
             conn.close()
 
             print(f"✅ تم الإرسال بنجاح إلى: {recipient_email}")
-            
-            # التوقف 5 ثواني بين كل إيميل والثاني لمنع حظر جوجل (Rate Limiting)
-            time.sleep(5)
+            time.sleep(3) # توقف مؤقت لحماية الاتصال
 
         except Exception as e:
             print(f"❌ فشل الإرسال إلى {recipient_email}: {e}")

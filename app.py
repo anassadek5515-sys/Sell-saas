@@ -25,7 +25,7 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("🦅 لوحة القيادة السيادية الشاملة - محرك الأوتريتش الذكي")
+st.title("🦅 لوحة القيادة السيادية - محرك البحث الصاروخي (Max-Level Search Engine)")
 st.markdown("---")
 
 ACCOUNTS_FILE = "accounts.csv"
@@ -35,8 +35,8 @@ LOG_FILE = "sent_stats.csv"
 # --- القائمة الجانبية للتحكم ---
 st.sidebar.header("⚙️ إعدادات التحكم والتشغيل")
 industry_keyword = st.sidebar.text_input("مجال البحث والفلترة", value="SaaS startup contact email")
-batch_size = st.sidebar.slider("حجم الدفعة", min_value=5, max_value=50, value=15)
-max_threads = st.sidebar.slider("خطوط الإرسال المتوازية (Threads)", min_value=1, max_value=10, value=3)
+batch_size = st.sidebar.slider("حجم الدفعة المستهدفة", min_value=5, max_value=100, value=20)
+max_threads = st.sidebar.slider("خطوط الإرسال المتوازية (Threads)", min_value=1, max_value=15, value=5)
 
 ai_personalization = st.sidebar.checkbox("✨ صياغة الرسائل بالذكاء الاصطناعي", value=True)
 enable_email_verifier = st.sidebar.checkbox("🛡️ فحص وتطهير الإيميلات (Anti-Bounce)", value=True)
@@ -80,8 +80,8 @@ def is_valid_email_syntax(email_str):
     pattern = r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
     if not re.match(pattern, email_str):
         return False
-    bad_endings = ('.png', '.jpg', '.jpeg', '.gif', '.css', '.js', '.svg', 'example.com', 'test.com', 'wixpress.com')
-    if email_str.endswith(bad_endings) or 'sentry' in email_str:
+    bad_endings = ('.png', '.jpg', '.jpeg', '.gif', '.css', '.js', '.svg', 'example.com', 'test.com', 'wixpress.com', 'sentry.io')
+    if email_str.endswith(bad_endings) or 'sentry' in email_str or 'domain' in email_str:
         return False
     return True
 
@@ -140,28 +140,70 @@ def ai_generate_personalized_content(url, html_text, base_offer):
     except:
         return f"Hi,\n\n{base_offer}\n\nBest regards,"
 
-def search_leads(keyword, limit):
-    try:
-        search_url = f"https://html.duckduckgo.com/html/?q={keyword}"
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        response = requests.get(search_url, headers=headers, timeout=5)
-        urls = re.findall(r'href="(http[s]?://[^"]+)"', response.text)
-        clean_urls = [u for u in urls if 'duckduckgo' not in u and 'microsoft' not in u][:limit*3]
+# --- 🚀 محرك البحث الموسع لأقصى ليفل (Multi-Engine Turbo Scraper) ---
+def search_leads_max_level(keyword, limit):
+    found = []
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'}
+    collected_urls = set()
 
-        found = []
-        for url in clean_urls:
-            try:
-                res = requests.get(url, headers=headers, timeout=2)
-                emails = set(re.findall(r"[a-zA-Z0-9.\-_+#']+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}", res.text))
-                for em in emails:
-                    if is_valid_email_syntax(em):
-                        ai_body = ai_generate_personalized_content(url, res.text, custom_offer)
-                        found.append({"website": url, "email": em, "content": ai_body})
-            except:
-                continue
-        return pd.DataFrame(found).drop_duplicates(subset=['email']).head(limit)
-    except:
-        return pd.DataFrame()
+    # المصدر 1: DuckDuckGo HTML
+    try:
+        url_ddg = f"https://html.duckduckgo.com/html/?q={keyword}"
+        res_ddg = requests.get(url_ddg, headers=headers, timeout=6)
+        urls_ddg = re.findall(r'href="(http[s]?://[^"]+)"', res_ddg.text)
+        for u in urls_ddg:
+            if 'duckduckgo' not in u and 'microsoft' not in u and 'yahoo' not in u:
+                collected_urls.add(u)
+    except Exception:
+        pass
+
+    # المصدر 2: Bing Search
+    try:
+        url_bing = f"https://www.bing.com/search?q={keyword}"
+        res_bing = requests.get(url_bing, headers=headers, timeout=6)
+        urls_bing = re.findall(r'href="(http[s]?://[^"]+)"', res_bing.text)
+        for u in urls_bing:
+            if 'bing.com' not in u and 'microsoft' not in u and 'msn' not in u:
+                collected_urls.add(u)
+    except Exception:
+        pass
+
+    # فحص المواقع واستخراج الإيميلات
+    for url in list(collected_urls)[:limit * 4]:
+        try:
+            res = requests.get(url, headers=headers, timeout=3)
+            raw_html = res.text
+
+            # استخراج الإيميلات من الصفحة الرئيسية
+            emails = set(re.findall(r"[a-zA-Z0-9.\-_+#']+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}", raw_html))
+            
+            # لو مفيش إيميل، ندور في صفحات Contact / About
+            if not emails:
+                soup = BeautifulSoup(raw_html, 'html.parser')
+                contact_links = [a['href'] for a in soup.find_all('a', href=True) if any(k in a['href'].lower() for k in ['contact', 'about', 'team'])]
+                for link in contact_links[:2]:
+                    target_url = link if link.startswith('http') else url.rstrip('/') + '/' + link.lstrip('/')
+                    try:
+                        sub_res = requests.get(target_url, headers=headers, timeout=2)
+                        emails.update(re.findall(r"[a-zA-Z0-9.\-_+#']+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}", sub_res.text))
+                    except Exception:
+                        continue
+
+            for em in emails:
+                if is_valid_email_syntax(em):
+                    ai_body = ai_generate_personalized_content(url, raw_html, custom_offer)
+                    found.append({"website": url, "email": em, "content": ai_body})
+                    if len(found) >= limit:
+                        break
+        except Exception:
+            continue
+        if len(found) >= limit:
+            break
+
+    df = pd.DataFrame(found)
+    if not df.empty:
+        return df.drop_duplicates(subset=['email']).head(limit)
+    return pd.DataFrame()
 
 def send_single_email(sender, password, recipient, subject, body):
     try:
@@ -249,8 +291,8 @@ if start_now:
     if not os.path.exists(ACCOUNTS_FILE):
         st.error("❌ ملف accounts.csv غير موجود!")
     else:
-        with st.spinner("🔍 جارٍ البحث عن الشركات وجلب الإيميلات المستهدفة..."):
-            leads = search_leads(industry_keyword, batch_size)
+        with st.spinner("🔍 جارٍ البحث عن الشركات وجلب الإيميلات بأقصى ليفل بحث متعدد..."):
+            leads = search_leads_max_level(industry_keyword, batch_size)
         
         if not leads.empty:
             st.success(f"✨ تم العثور على {len(leads)} شركة، جارٍ بدء الضخ الآن...")

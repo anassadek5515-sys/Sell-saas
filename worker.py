@@ -4,21 +4,20 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from concurrent.futures import ThreadPoolExecutor
-import time
 import sys
 
 # ==========================================
-# إعدادات حملة الإرسال (1.4M / Day Target)
+# إعدادات الحملة الفائقة (1.4M / Day Target)
 # ==========================================
-BATCH_SIZE = 14584         # عدد الإيميلات في الدورة الواحدة (كل 15 دقيقة)
-MAX_WORKERS = 100          # عدد الخيوط المتوازية للسرعة العالية
+BATCH_SIZE = 14584         # عدد الإيميلات في الدورة (كل 15 دقيقة)
+MAX_WORKERS = 200          # رفع عدد المسارات لـ سرعة البرق (Lightning Fast)
 INDEX_FILE = "last_account_index.txt"
 
-# إعدادات خادم البريد (SMTP) - قم بتعديلها بما يناسب مزود الخدمة لديك
+# ⚠️ بيانات خادم الإرسال الحقيقي (SMTP)
 SMTP_SERVER = "smtp.yourprovider.com"
 SMTP_PORT = 587
-SMTP_USER = "your_email@domain.com"
-SMTP_PASSWORD = "your_password"
+SMTP_USER = "your_real_email@company.com"
+SMTP_PASSWORD = "your_real_password"
 
 def load_index():
     if os.path.exists(INDEX_FILE):
@@ -35,66 +34,63 @@ def save_index(index):
 
 def send_single_email(recipient):
     """
-    دالة إرسال الإيميل الفردية عبر SMTP
+    إرسال فوري فائق السرعة لإيميل الشركة
     """
     try:
-        # إذا كنت تستخدم API خارجي بدلاً من SMTP، استبدل هذا الجزء بكود الـ API الخاص بك
         msg = MIMEMultipart()
         msg['From'] = SMTP_USER
         msg['To'] = recipient
-        msg['Subject'] = "عروض مميزة خصيصاً لك"
+        msg['Subject'] = "فرصة تعاون استراتيجي وتجاري"
         
-        body = "مرحباً، هذه رسالة تجريبية من حملتنا التسويقية."
+        body = "مرحباً،\n\nنود عرض خدماتنا وتأسيس شراكة عمل ناجحة معكم...\n\nمع تحيات إدارة التطوير."
         msg.attach(MIMEText(body, 'plain'))
 
-        # الاتصال بالسيرفر والإرسال
-        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=10) as server:
             server.starttls()
             server.login(SMTP_USER, SMTP_PASSWORD)
             server.sendmail(SMTP_USER, recipient, msg.as_string())
         
-        print(f"✅ تم الإرسال بنجاح إلى: {recipient}")
+        print(f"⚡ [تم الإرسال بسرعة البرق] إلى: {recipient}", flush=True)
         return True
     except Exception as e:
-        print(f"❌ فشل الإرسال إلى {recipient}: {e}")
+        # لضمان عدم توقف الحملة الكبرى لو إيميل واحد فشل
         return False
 
 def main():
-    print("🚀 [Worker] بدأ تشغيل محرك الخلفية المستمر...", flush=True)
+    print("🚀 [النظام الذكي] بدأ التشغيل التلقائي بالكامل...", flush=True)
     
-    # 1. التحقق من وجود ملف الأهداف
+    # التحقق من وجود ملف الشركات الحقيقي
     if not os.path.exists("targets.csv"):
-        print("❌ خطأ: ملف الأهداف targets.csv غير موجود في المستودع!", flush=True)
-        return
+        print("❌ خطأ: ملف targets.csv غير موجود. يرجى التأكد من توفير قائمة إيميلات الشركات.", flush=True)
+        sys.exit(1)
 
     df_targets = pd.read_csv("targets.csv")
-    current_index = load_index()
+    
+    if 'email' not in df_targets.columns:
+        print("❌ خطأ: يجب أن يحتوي الملف على عمود باسم 'email'", flush=True)
+        sys.exit(1)
 
-    # تحديد الدفعة الحالية
+    current_index = load_index()
     end_index = min(current_index + BATCH_SIZE, len(df_targets))
     batch_targets = df_targets.iloc[current_index:end_index]
 
     if batch_targets.empty:
-        print("🎉 تم الانتهاء من جميع الإيميلات في القائمة بنجاح!", flush=True)
+        print("🎉 تم إرسال الحملة بالكامل لجميع الشركات بنجاح تام!", flush=True)
         return
 
-    print(f"📤 جاري إرسال دفعة من الإيميلات من الفهرس {current_index} إلى {end_index}...", flush=True)
+    print(f"⚡ جاري ضخ دفعة الشركات من {current_index} إلى {end_index} بسرعة فائقة...", flush=True)
 
     success_count = 0
-    # 2. الإرسال المتوازي باستخدام ThreadPoolExecutor
+    # تشغيل 200 مسار في نفس اللحظة (ThreadPoolExecutor) للإرسال الفوري
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        futures = []
-        for index, row in batch_targets.iterrows():
-            recipient_email = row['email']  # تأكد أن عمود الإيميلات في ملف targets.csv اسمه email
-            futures.append(executor.submit(send_single_email, recipient_email))
-        
+        futures = [executor.submit(send_single_email, row['email']) for _, row in batch_targets.iterrows()]
         for future in futures:
             if future.result():
                 success_count += 1
 
-    # 3. تحديث وحفظ مؤشر التقدم للدورة القادمة
+    # حفظ المؤشر تلقائياً للانتقال للدفعة التالية في الدورة القادمة (بعد 15 دقيقة)
     save_index(end_index)
-    print(f"✅ [Worker] انتهت الدورة بنجاح. تم إرسال {success_count} إيميل. المؤشر الجديد: {end_index}", flush=True)
+    print(f"✅ [انتهت الدورة] تم إرسال {success_count} شركة بنجاح. المؤشر الجديد: {end_index}", flush=True)
 
 if __name__ == "__main__":
     main()

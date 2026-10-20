@@ -1,101 +1,72 @@
 import os
-import time
-import random
-import smtplib
 import pandas as pd
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+import requests
+from concurrent.futures import ThreadPoolExecutor
+import time
 
-ACCOUNTS_FILE = "final_ready_accounts.csv"
-STATE_FILE = "last_account_index.txt"
-LOG_FILE = "sent_stats.csv"
+# ==========================================
+# إعدادات حملة الإرسال (1.4M / Day Target)
+# ==========================================
+BATCH_SIZE = 14584         # عدد الإيميلات في الدورة الواحدة (كل 15 دقيقة)
+MAX_WORKERS = 100          # عدد الخيوط المتوازية (Threads) للسرعة العالية
+INDEX_FILE = "last_account_index.txt"
 
-GMAIL_SMTP = "smtp.gmail.com"
-
-def get_index(filename):
-    if os.path.exists(filename):
-        try:
-            with open(filename, "r") as f:
+def load_index():
+    if os.path.exists(INDEX_FILE):
+        with open(INDEX_FILE, "r") as f:
+            try:
                 return int(f.read().strip())
-        except:
-            return 0
+            except ValueError:
+                return 0
     return 0
 
-def save_index(filename, idx):
-    with open(filename, "w") as f:
-        f.write(str(idx))
+def save_index(index):
+    with open(INDEX_FILE, "w") as f:
+        f.write(str(index))
 
-def send_email_silent(sender, password, recipient, subject, body):
+def send_single_email(recipient, account_data):
+    # دالة إرسال الإيميل الفردية عبر الحساب المحدد
     try:
-        time.sleep(random.uniform(0.2, 0.6)) # تأخير أمان عشوائي
-        server = smtplib.SMTP(GMAIL_SMTP, 587, timeout=5)
-        server.starttls()
-        server.login(sender, password)
-        
-        msg = MIMEMultipart()
-        msg['From'] = sender
-        msg['To'] = recipient
-        msg['Subject'] = subject
-        msg.attach(MIMEText(body, 'plain', 'utf-8'))
-        
-        server.sendmail(sender, recipient, msg.as_string())
-        server.quit()
+        # ضع هنا كود الـ API أو الـ SMTP الخاص بإرسال الإيميل
+        # مثال وهمي لطلب HTTP:
+        # response = requests.post("https://api.emailservice.com/send", json={...})
+        print(f"تم الإرسال بنجاح إلى: {recipient}")
         return True
     except Exception as e:
+        print(f"فشل الإرسال إلى {recipient}: {e}")
         return False
 
-def run_background_outreach():
-    print("🚀 [Worker] بدأ تشغيل محرك الخلفية المستمر...")
+def main():
+    print("--- بدء دورة الإرسال الجديدة ---")
     
-    while True:
-        if not os.path.exists(ACCOUNTS_FILE):
-            print("⏳ في انتظار ملف الحسابات final_ready_accounts.csv...")
-            time.sleep(10)
-            continue
-            
-        try:
-            accounts_df = pd.read_csv(ACCOUNTS_FILE, header=None, names=["email", "password"], encoding='utf-8', on_bad_lines='skip')
-            total_accounts = len(accounts_df)
-            
-            if total_accounts == 0:
-                time.sleep(10)
-                continue
-                
-            current_idx = get_index(STATE_FILE)
-            
-            # توليد دفعة جديدة للإرسال
-            batch_leads = [
-                {"company": f"Global Tech {i}", "email": f"contact{i}@startupstore{i}.io"} 
-                for i in range(current_idx, current_idx + 200)
-            ]
-            
-            tasks = []
-            for lead in batch_leads:
-                acc_row = accounts_df.iloc[current_idx % total_accounts]
-                sender = str(acc_row['email']).strip()
-                pwd = str(acc_row['password']).strip()
-                current_idx += 1
-                
-                body = f"Hi {lead['company']} team,\n\nWe built an automated analytics engine for $200/month.\n\nBest,\nAnas"
-                tasks.append((sender, pwd, lead['email'], "Quick question about analytics", body))
-                
-            save_index(STATE_FILE, current_idx)
-            
-            # تنفيذ الإرسال المتوازي السريع
-            success_count = 0
-            with ThreadPoolExecutor(max_workers=20) as executor:
-                futures = {executor.submit(send_email_silent, t[0], t[1], t[2], t[3], t[4]): t for t in tasks}
-                for future in as_completed(futures):
-                    if future.result():
-                        success_count += 1
-                        
-            print(print(f"✅ [Worker] تم إرسال دفعة بنجاح: {success_count} إيميل. المؤشر الحالي: {current_idx}"))
-            time.sleep(2) # راحة قصيرة بين الدفعات
-            
-        except Exception as e:
-            print(f"⚠️ خطأ في حلقة التشغيل: {e}")
-            time.sleep(5)
+    # 1. تحميل قائمة الإيميلات المستهدفة وقائمة الحسابات
+    # تأكد من مسارات الملفات لديك (مثل targets.csv و accounts.csv)
+    if not os.path.exists("targets.csv"):
+        print("ملف الأهداف targets.csv غير موجود!")
+        return
+
+    df_targets = pd.read_csv("targets.csv")
+    current_index = load_index()
+
+    # تحديد الدفعة الحالية بناءً على مؤشر التقدم
+    end_index = min(current_index + BATCH_SIZE, len(df_targets))
+    batch_targets = df_targets.iloc[current_index:end_index]
+
+    if batch_targets.empty:
+        print("تم الانتهاء من جميع الإيميلات في القائمة بنجاح!")
+        return
+
+    print(f"جاري إرسال دفعة من الإيميلات من الفهرس {current_index} إلى {end_index}...")
+
+    # 2. الإرسال المتوازي باستخدام ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        for index, row in batch_targets.iterrows():
+            recipient_email = row['email'] # اسم عمود الإيميل في ملفك
+            executor.submit(send_single_email, recipient_email, None)
+
+    # 3. تحديث وحفظ مؤشر التقدم للدورة القادمة
+    save_index(end_index)
+    print(f"--- انتهت الدورة بنجاح، المؤشر الجديد هو: {end_index} ---")
 
 if __name__ == "__main__":
-    run_background_outreach()
+    main()

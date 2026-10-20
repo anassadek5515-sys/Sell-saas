@@ -9,7 +9,7 @@ COPY . .
 
 EXPOSE 8501
 
-ENV STREAMLIT_SERVER_PORT=8501
 ENV STREAMLIT_SERVER_ADDRESS=0.0.0.0
 
-CMD unset STREAMLIT_SERVER_PORT && streamlit run app.py
+# استخدام بورت Railway الديناميكي المعتمد لضمان عمل التطبيق بدون مشاكل
+CMD streamlit run app.py --server.port=${PORT:-8501}

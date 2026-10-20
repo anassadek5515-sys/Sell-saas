@@ -1,64 +1,68 @@
 import os
-import pandas as pd
-import requests
+import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 import time
 
 # ==========================================
-# إعدادات حملة الإرسال (1.4M / Day Target)
+# إعدادات حملة الإرسال
 # ==========================================
-BATCH_SIZE = 14584         # عدد الإيميلات في الدورة الواحدة (كل 15 دقيقة)
-MAX_WORKERS = 100          # عدد الخيوط المتوازية (Threads) للسرعة العالية
-INDEX_FILE = "last_account_index.txt"
+BATCH_SIZE = 100          # عدد الإيميلات في الدورة الواحدة
+MAX_WORKERS = 10          # عدد الخيوط المتوازية للإرسال
+DB_FILE = "companies.db"
 
-def load_index():
-    if os.path.exists(INDEX_FILE):
-        with open(INDEX_FILE, "r") as f:
-            try:
-                return int(f.read().strip())
-            except ValueError:
-                return 0
-    return 0
-
-def save_index(index):
-    with open(INDEX_FILE, "w") as f:
-        f.write(str(index))
-
-def send_single_email(recipient, account_data):
-    # دالة إرسال الإيميل الفردية عبر الحساب المحدد
+def send_single_email(recipient_email):
+    """دالة إرسال الإيميل الفردية"""
     try:
-        print(f"تم الإرسال بنجاح إلى: {recipient}")
+        # ضع هنا كود الـ SMTP أو الـ API الخاص بإرسال الإيميل الفعلي
+        print(f"تم الإرسال بنجاح إلى: {recipient_email}")
         return True
     except Exception as e:
-        print(f"فشل الإرسال إلى {recipient}: {e}")
+        print(f"فشل الإرسال إلى {recipient_email}: {e}")
         return False
 
 def main():
-    print("--- بدء دورة الإرسال الجديدة ---")
+    print("--- بدء دورة الإرسال الجديدة من قاعدة البيانات ---")
     
-    if not os.path.exists("targets.csv"):
-        print("ملف الأهداف targets.csv غير موجود!")
+    if not os.path.exists(DB_FILE):
+        print(f"ملف قاعدة البيانات {DB_FILE} غير موجود!")
         return
-        
-    df_targets = pd.read_csv("targets.csv")
-    current_index = load_index()
-    
-    end_index = min(current_index + BATCH_SIZE, len(df_targets))
-    batch_targets = df_targets.iloc[current_index:end_index]
-    
-    if batch_targets.empty:
-        print("تم الانتهاء من جميع الإيميلات في القائمة بنجاح!")
-        return
-        
-    print(f"جاري إرسال دفعة من الإيميلات من الفهرس {current_index} إلى {end_index}...")
-    
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        for index, row in batch_targets.iterrows():
-            recipient_email = row['email']
-            executor.submit(send_single_email, recipient_email, None)
-            
-    save_index(end_index)
-    print(f"--- انتهت الدورة بنجاح، المؤشر الجديد هو: {end_index} ---")
+
+    # الاتصال بقاعدة البيانات SQLite
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+
+    try:
+        # جلب الشركات التي لم يتم مراسلتها بعد (أو جاهزة للإرسال)
+        # ملاحظة: تأكد أن اسم الجدول والأعمدة يتطابق مع ما ينشئه موقع البحث لديك
+        cursor.execute("SELECT id, email FROM companies WHERE status = 'Ready' LIMIT ?", (BATCH_SIZE,))
+        rows = cursor.fetchall()
+
+        if not rows:
+            print("لا توجد إيميلات جديدة بحالة 'Ready' في قاعدة البيانات حالياً.")
+            conn.close()
+            return
+
+        print(f"جاري إرسال دفعة تضم {len(rows)} إيميل...")
+
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            futures = []
+            for row in rows:
+                row_id, recipient_email = row
+                if recipient_email:
+                    futures.append((row_id, executor.submit(send_single_email, recipient_email)))
+
+            # تحديث حالة الإيميلات التي تم إرسالها في قاعدة البيانات
+            for row_id, future in futures:
+                if future.result():
+                    cursor.execute("UPDATE companies SET status = 'Sent' WHERE id = ?", (row_id,))
+                    conn.commit()
+
+        print("--- انتهت الدورة الحالية بنجاح ---")
+
+    except Exception as e:
+        print(f"حدث خطأ أثناء معالجة قاعدة البيانات: {e}")
+    finally:
+        conn.close()
 
 if __name__ == "__main__":
     main()

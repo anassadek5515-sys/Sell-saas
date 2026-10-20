@@ -25,7 +25,7 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("🦅 لوحة القيادة السيادية - محرك الإرسال المستقر")
+st.title("🦅 لوحة القيادة السيادية الشاملة - محرك الأوتريتش الذكي")
 st.markdown("---")
 
 ACCOUNTS_FILE = "accounts.csv"
@@ -33,16 +33,15 @@ STATE_FILE = "last_index.txt"
 LOG_FILE = "sent_stats.csv"
 
 # --- القائمة الجانبية للتحكم ---
-st.sidebar.header("⚙️ إعدادات الإرسال الفوري")
+st.sidebar.header("⚙️ إعدادات التحكم والتشغيل")
 industry_keyword = st.sidebar.text_input("مجال البحث والفلترة", value="SaaS startup contact email")
-batch_size = st.sidebar.slider("حجم الدفعة", min_value=5, max_value=30, value=10)
-max_threads = st.sidebar.slider("خطوط الإرسال المتوازية (Threads)", min_value=1, max_value=5, value=2)
+batch_size = st.sidebar.slider("حجم الدفعة", min_value=5, max_value=50, value=15)
+max_threads = st.sidebar.slider("خطوط الإرسال المتوازية (Threads)", min_value=1, max_value=10, value=3)
 
-ai_personalization = st.sidebar.checkbox("✨ تفعيل صياغة الرسائل بالذكاء الاصطناعي", value=True)
-enable_email_verifier = st.sidebar.checkbox("🛡️ تفعيل فحص وتطهير الإيميلات", value=True)
+ai_personalization = st.sidebar.checkbox("✨ صياغة الرسائل بالذكاء الاصطناعي", value=True)
+enable_email_verifier = st.sidebar.checkbox("🛡️ فحص وتطهير الإيميلات (Anti-Bounce)", value=True)
 
-# زرار التشغيل اليدوي
-start_now = st.sidebar.button("🚀 بدء الإرسال الآن", type="primary")
+start_now = st.sidebar.button("🚀 بدء إرسال الدفعة الحالية", type="primary")
 
 subject_template = st.sidebar.text_input("عنوان الرسالة", value="Quick question regarding growth & scaling")
 custom_offer = st.text_area(
@@ -85,6 +84,48 @@ def is_valid_email_syntax(email_str):
     if email_str.endswith(bad_endings) or 'sentry' in email_str:
         return False
     return True
+
+def check_incoming_replies():
+    if not os.path.exists(ACCOUNTS_FILE):
+        return 0, 0, []
+    try:
+        accounts = pd.read_csv(ACCOUNTS_FILE, encoding='utf-8', on_bad_lines='skip', nrows=10)
+        accounts.columns = accounts.columns.str.strip().str.lower()
+    except:
+        return 0, 0, []
+
+    total_rep, interested_count, replies_list = 0, 0, []
+    for idx, row in accounts.iterrows():
+        acc_email = str(row.get('email', '')).strip()
+        acc_pwd = str(row.get('password', '')).strip()
+        if not acc_email or not acc_pwd:
+            continue
+        try:
+            mail = imaplib.IMAP4_SSL(GMAIL_IMAP, timeout=2)
+            mail.login(acc_email, acc_pwd)
+            mail.select("inbox")
+            status, messages = mail.search(None, 'UNSEEN')
+            for e_id in messages[0].split():
+                _, msg_data = mail.fetch(e_id, '(RFC822)')
+                for response_part in msg_data:
+                    if isinstance(response_part, tuple):
+                        msg = email.message_from_bytes(response_part[1])
+                        body = msg.get_payload(decode=True).decode(errors='ignore') if not msg.is_multipart() else "Multipart"
+                        total_rep += 1
+                        is_interested = any(w in body.lower() for w in ['interested', 'yes', 'call', 'demo', 'more info', 'sure', 'pricing'])
+                        if is_interested: 
+                            interested_count += 1
+                        
+                        replies_list.append({
+                            "Account": acc_email,
+                            "From": msg.get("From"),
+                            "Status": "🔥 عميل مهتم جداً" if is_interested else "📩 رد عادٍ",
+                            "Snippet": body[:80] + "..."
+                        })
+            mail.logout()
+        except:
+            continue
+    return total_rep, interested_count, replies_list
 
 def ai_generate_personalized_content(url, html_text, base_offer):
     try:
@@ -138,26 +179,87 @@ def send_single_email(sender, password, recipient, subject, body):
     except Exception as e:
         return False, f"❌ فشل إرسال الإيميل إلى **{recipient}** من الحساب `{sender}`"
 
-# --- واجهة العمليات الأساسية ---
-st.subheader("📋 تقرير حالة الحملة والإرسال")
+# حسابات الإحصائيات
+total_accounts_count = 280000
+current_idx = get_current_account_index()
+used_accounts = current_idx % total_accounts_count
+remaining_accounts = total_accounts_count - used_accounts
 
+total_rep, interest_rep, rep_details = check_incoming_replies()
+
+# ==================== الأقسام الثلاثة الكبرى ====================
+tab1, tab2, tab3 = st.tabs([
+    "🎯 القسم الأول: الردود والعملاء المهتمين", 
+    "📊 القسم الثاني: نشاط وتدوير الـ 280 ألف حساب", 
+    "📈 القسم الثالث: الرسومات البيانية ومتابعة الإرسال"
+])
+
+with tab1:
+    st.subheader("🎯 إدارة الشركات والعملاء المهتمين (Hot Leads)")
+    if rep_details:
+        df_rep = pd.DataFrame(rep_details)
+        col_a, col_b = st.columns(2)
+        with col_a:
+            st.markdown("### 🔥 العملاء المهتمون")
+            interested_df = df_rep[df_rep['Status'].str.contains("مهتم", na=False)]
+            if not interested_df.empty:
+                st.dataframe(interested_df, use_container_width=True)
+            else:
+                st.info("لم يتم رصد عملاء مهتمين بعد.")
+        with col_b:
+            st.markdown("### 📩 الردود العادية")
+            uninterested_df = df_rep[~df_rep['Status'].str.contains("مهتم", na=False)]
+            if not uninterested_df.empty:
+                st.dataframe(uninterested_df, use_container_width=True)
+            else:
+                st.info("لا توجد ردود عادية حالياً.")
+    else:
+        st.info("📬 صناديق الوارد قيد المراقبة... ستظهر الردود هنا فور وصولها.")
+
+with tab2:
+    st.subheader("📊 لوحة مراقبة الـ 280 ألف حساب وتدويرها")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("إجمالي الحسابات الكلي", f"{total_accounts_count:,}")
+    c2.metric("الحسابات المستهلكة", f"{used_accounts:,}")
+    c3.metric("الحسابات المتبقية", f"{remaining_accounts:,}")
+    c4.metric("حماية الـ Anti-Bounce", "🟢 نشطة")
+    
+    if os.path.exists(ACCOUNTS_FILE):
+        st.markdown("### 📄 عينة من ملف الحسابات المرفق (`accounts.csv`):")
+        st.dataframe(pd.read_csv(ACCOUNTS_FILE, nrows=10), use_container_width=True)
+    else:
+        st.warning("⚠️ ملف accounts.csv غير مرفوع على السيرفر.")
+
+with tab3:
+    st.subheader("📈 مؤشر الإرسال والرسومات البيانية الحية")
+    if os.path.exists(LOG_FILE):
+        chart_df = pd.read_csv(LOG_FILE)
+        if not chart_df.empty:
+            st.line_chart(chart_df.set_index("time"))
+        else:
+            st.info("📊 بانتظار بدء أول دفعة إرسال لرسم المخطط البياني.")
+    else:
+        st.info("📊 سيظهر المخطط البياني فور بدء الإرسال.")
+
+# ==================== تنفيذ الإرسال عند الضغط ====================
 if start_now:
+    st.markdown("---")
+    st.subheader("🚀 سجل تنفيذ الدفعة الحالية (البث المباشر):")
+    
     if not os.path.exists(ACCOUNTS_FILE):
-        st.error("❌ ملف accounts.csv غير موجود على السيرفر!")
+        st.error("❌ ملف accounts.csv غير موجود!")
     else:
         with st.spinner("🔍 جارٍ البحث عن الشركات وجلب الإيميلات المستهدفة..."):
             leads = search_leads(industry_keyword, batch_size)
         
         if not leads.empty:
-            st.success(f"✨ تم العثور على {len(leads)} شركة، جارٍ بدء الضخ المستقر...")
+            st.success(f"✨ تم العثور على {len(leads)} شركة، جارٍ بدء الضخ الآن...")
             
             accounts_df = pd.read_csv(ACCOUNTS_FILE, encoding='utf-8', on_bad_lines='skip')
             accounts_df.columns = accounts_df.columns.str.strip().str.lower()
             total_accounts = len(accounts_df)
             
-            current_idx = get_current_account_index()
             tasks = []
-            
             for i, row in leads.iterrows():
                 target = row['email']
                 body = row['content']
@@ -172,7 +274,6 @@ if start_now:
             sent_in_batch = 0
             live_logs = []
             
-            # تنفيذ الإرسال بشكل آمن ومستقر بدون أخطاء واجهة المستخدم
             progress_bar = st.progress(0)
             status_text = st.empty()
             
@@ -187,7 +288,6 @@ if start_now:
                     live_logs.append(message)
                     completed_count += 1
                     
-                    # تحديث شريط التقدم بأمان
                     progress_bar.progress(completed_count / len(tasks))
                     status_text.text(f"⏳ تم معالجة {completed_count} من {len(tasks)} إيميل...")
             
@@ -196,11 +296,8 @@ if start_now:
             
             st.success(f"🎉 تم الانتهاء بنجاح من إرسال دفعة مكونة من {sent_in_batch} إيميل!")
             
-            # عرض السجل النهائي مرتباً وواضحاً
-            st.markdown("### 📝 سجل الإرسال النهائي لهذه الدفعة:")
+            st.markdown("### 📝 تفاصيل الإرسال وحالة الحسابات المستخدمة:")
             for log in live_logs:
                 st.write(log)
         else:
-            st.warning("⚠️ لم يتم العثور على إيميلات جديدة في هذه الدفعة، جرب تغيير كلمة البحث في القائمة الجانبية.")
-else:
-    st.info("ℹ️ اضغط على زر **'بدء الإرسال الآن'** في القائمة الجانبية لتنفيذ الحملة بشكل مستقر وسريع.")
+            st.warning("⚠️ لم يتم العثور على إيميلات جديدة في هذه الدفعة، جرب تغيير كلمة البحث في القائمة الجانبية (مثلاً: CEO contact email startup).")

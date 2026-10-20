@@ -43,7 +43,7 @@ def check_inbox_replies():
             mail.logout()
             return
 
-        print(جاري فحص {len(email_ids)} رسالة جديدة...)
+        print(f"📥 جاري فحص {len(email_ids)} رسالة جديدة...")
 
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
@@ -56,14 +56,14 @@ def check_inbox_replies():
                     
                     # استخراج إيميل المرسل وصندوق الموضوع
                     from_header = msg.get('From')
-                    subject_header = msg.get('Subject', '')
                     
                     # استخراج البريد الصافي للمرسل
                     sender_email = ""
-                    if '<' in from_header and '>' in from_header:
-                        sender_email = from_header.split('<')[1].split('>')[0].strip()
-                    else:
-                        sender_email = from_header.strip()
+                    if from_header:
+                        if '<' in from_header and '>' in from_header:
+                            sender_email = from_header.split('<')[1].split('>')[0].strip()
+                        else:
+                            sender_email = from_header.strip()
 
                     # استخراج نص الرسالة (Body)
                     body = ""

@@ -1,5 +1,5 @@
 import os
-import pandas as pd
+import sqlite3
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -10,8 +10,9 @@ import sys
 # إعدادات الحملة الفائقة (1.4M / Day Target)
 # ==========================================
 BATCH_SIZE = 14584         # عدد الإيميلات في الدورة (كل 15 دقيقة)
-MAX_WORKERS = 200          # رفع عدد المسارات لـ سرعة البرق (Lightning Fast)
-INDEX_FILE = "last_account_index.txt"
+MAX_WORKERS = 200          # عدد المسارات المتوازية للسرعة الفائقة
+DB_FILE = "companies.db"   # قاعدة البيانات الخفيفة للملايين
+INDEX_FILE = "last_db_id.txt" # حفظ آخر رقم ID تم الإرسال إليه
 
 # ⚠️ بيانات خادم الإرسال الحقيقي (SMTP)
 SMTP_SERVER = "smtp.yourprovider.com"
@@ -19,7 +20,7 @@ SMTP_PORT = 587
 SMTP_USER = "your_real_email@company.com"
 SMTP_PASSWORD = "your_real_password"
 
-def load_index():
+def get_last_id():
     if os.path.exists(INDEX_FILE):
         with open(INDEX_FILE, "r") as f:
             try:
@@ -28,9 +29,9 @@ def load_index():
                 return 0
     return 0
 
-def save_index(index):
+def save_last_id(last_id):
     with open(INDEX_FILE, "w") as f:
-        f.write(str(index))
+        f.write(str(last_id))
 
 def send_single_email(recipient):
     """
@@ -50,47 +51,56 @@ def send_single_email(recipient):
             server.login(SMTP_USER, SMTP_PASSWORD)
             server.sendmail(SMTP_USER, recipient, msg.as_string())
         
-        print(f"⚡ [تم الإرسال بسرعة البرق] إلى: {recipient}", flush=True)
+        print(f"⚡ [تم الإرسال] إلى: {recipient}", flush=True)
         return True
     except Exception as e:
-        # لضمان عدم توقف الحملة الكبرى لو إيميل واحد فشل
         return False
 
 def main():
-    print("🚀 [النظام الذكي] بدأ التشغيل التلقائي بالكامل...", flush=True)
+    print("🚀 [النظام الخفيف] بدأ تشغيل محرك ملايين الشركات...", flush=True)
     
-    # التحقق من وجود ملف الشركات الحقيقي
-    if not os.path.exists("targets.csv"):
-        print("❌ خطأ: ملف targets.csv غير موجود. يرجى التأكد من توفير قائمة إيميلات الشركات.", flush=True)
+    if not os.path.exists(DB_FILE):
+        print(f"❌ خطأ: قاعدة البيانات {DB_FILE} غير موجودة في المستودع!", flush=True)
         sys.exit(1)
 
-    df_targets = pd.read_csv("targets.csv")
-    
-    if 'email' not in df_targets.columns:
-        print("❌ خطأ: يجب أن يحتوي الملف على عمود باسم 'email'", flush=True)
-        sys.exit(1)
+    # الاتصال بقاعدة البيانات الخفيفة
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
 
-    current_index = load_index()
-    end_index = min(current_index + BATCH_SIZE, len(df_targets))
-    batch_targets = df_targets.iloc[current_index:end_index]
+    last_id = get_last_id()
 
-    if batch_targets.empty:
-        print("🎉 تم إرسال الحملة بالكامل لجميع الشركات بنجاح تام!", flush=True)
+    # جلب الدفعة التالية فقط (14,584 إيميل) بسرعة خيالية ودون تحميل الملف كله بالذاكرة
+    cursor.execute("SELECT id, email FROM emails WHERE id > ? ORDER BY id ASC LIMIT ?", (last_id, BATCH_SIZE))
+    rows = cursor.fetchall()
+
+    if not rows:
+        print("🎉 تم إرسال الحملة بالكامل لجميع الشركات في قاعدة البيانات!", flush=True)
+        conn.close()
         return
 
-    print(f"⚡ جاري ضخ دفعة الشركات من {current_index} إلى {end_index} بسرعة فائقة...", flush=True)
+    print(f"⚡ جاري ضخ دفعة من {len(rows)} شركة بسرعة فائقة...", flush=True)
 
     success_count = 0
-    # تشغيل 200 مسار في نفس اللحظة (ThreadPoolExecutor) للإرسال الفوري
+    max_id_reached = last_id
+
+    # تشغيل 200 مسار في نفس اللحظة للإرسال الفوري
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        futures = [executor.submit(send_single_email, row['email']) for _, row in batch_targets.iterrows()]
+        futures = {}
+        for row_id, email in rows:
+            futures[executor.submit(send_single_email, email)] = row_id
+        
         for future in futures:
+            row_id = futures[future]
             if future.result():
                 success_count += 1
+            if row_id > max_id_reached:
+                max_id_reached = row_id
 
-    # حفظ المؤشر تلقائياً للانتقال للدفعة التالية في الدورة القادمة (بعد 15 دقيقة)
-    save_index(end_index)
-    print(f"✅ [انتهت الدورة] تم إرسال {success_count} شركة بنجاح. المؤشر الجديد: {end_index}", flush=True)
+    # حفظ آخر ID تم الوصول إليه
+    save_last_id(max_id_reached)
+    conn.close()
+    
+    print(f"✅ [انتهت الدورة] تم إرسال {success_count} شركة بنجاح. آخر ID تم الوصول إليه: {max_id_reached}", flush=True)
 
 if __name__ == "__main__":
     main()

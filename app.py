@@ -60,7 +60,7 @@ use_jitter = st.sidebar.checkbox("⏳ تأخير زمني عشوائي (Human Ji
 use_spintax = st.sidebar.checkbox("🔀 تنويع نصوص الرسائل (Spintax Engine)", value=True, help="يغير مرادفات وطريقة صياغة الرسالة أوتوماتيكياً لتفادي فلاتر الـ Spam.")
 enable_verifier = st.sidebar.checkbox("🧹 فلترة وتطهير الإيميلات الوهمية", value=True, help="يفحص الإيميلات ويستبعد النطاقات التالفة أو الوهمية قبل الإرسال.")
 
-auto_secure_run = st.sidebar.checkbox("🚀 تفعيل المحرك الآمن المستمر 24/7", value=False)
+auto_secure_run = st.sidebar.checkbox("🚀 تفعيل المحرك الآمن المستمر (جاهز للإطلاق)", value=False)
 check_replies_btn = st.sidebar.button("📬 فحص الردود والعملاء المهتمين الآن")
 
 GMAIL_SMTP = "smtp.gmail.com"
@@ -248,7 +248,7 @@ with tab4:
     else:
         st.info("📊 سيظهر المخطط البياني فور عمل المحرك الآمن.")
 
-# ==================== محرك الإرسال الآمن المستمر ====================
+# ==================== محرك الإرسال الآمن المستقرار ====================
 if auto_secure_run:
     st.markdown("---")
     st.subheader("🛡️ [المحرك الآمن قيد التشغيل] - إرسال محصن ضد الحظر...")
@@ -274,9 +274,7 @@ if auto_secure_run:
             pwd = str(acc_row['password']).strip()
             current_acc_idx += 1
             
-            # صياغة النص للعميل مع دمج عرضك المخصص
             body = custom_offer.replace("[Company]", company_name)
-            
             tasks.append((sender, pwd, target_email, subject_template, body))
             
         save_index(STATE_FILE, current_acc_idx)
@@ -298,7 +296,4 @@ if auto_secure_run:
                 status_box.text(f"🛡️ جارٍ الإرسال المحصن: {done_count} من {len(tasks)} إيميل...")
         
         log_sent_metric(sent_in_batch)
-        st.success(f"🎉 تمت الدفعة الآمنة بنجاح ({sent_in_batch} إيميل)، والمحرك يجدد الدورة بحماية تامة!")
-        
-        time.sleep(1)
-        st.rerun()
+        st.success(f"🎉 تمت الدفعة الآمنة بنجاح ({sent_in_batch} إيميل)! انقر مجدداً لبدء الدفعة التالية.")

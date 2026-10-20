@@ -80,7 +80,7 @@ def run_worker():
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
 
-    # التأكد من إنشاء الجدول بالأعمدة الصحيحة تماماً لمنع أي خطأ
+    # 1. التأكد من إنشاء الجدول لو مش موجود أصلاً
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS companies (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -91,6 +91,18 @@ def run_worker():
         )
     """)
     conn.commit()
+
+    # 2. فحص ذكي: التأكد هل عمود name موجود فعلاً في الجدول القديم ولا لأ، ولو مش موجود بنضيفه أوتوماتيك
+    cursor.execute("PRAGMA table_info(companies);")
+    columns = [col[1] for col in cursor.fetchall()]
+    
+    if 'name' not in columns:
+        try:
+            cursor.execute("ALTER TABLE companies ADD COLUMN name TEXT;")
+            conn.commit()
+            print("🔧 تم إضافة عمود 'name' المفقود أوتوماتيكياً بنجاح!")
+        except Exception as ex:
+            print(f"⚠️ خطأ أثناء محطة إضافة العمود: {ex}")
 
     # سحب الشركات التي حالتها Ready فقط
     cursor.execute("SELECT id, name, email FROM companies WHERE status = 'Ready' LIMIT 50")

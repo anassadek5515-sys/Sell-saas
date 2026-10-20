@@ -20,6 +20,13 @@ jobs:
       - name: Install dependencies
         run: pip install pandas requests
 
+      - name: Run replies checker script
+        run: python check_replies.py
+        env:
+          IMAP_SERVER: ${{ secrets.IMAP_SERVER }}
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+
       - name: Run worker script
         run: python worker.py
         env:

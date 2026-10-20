@@ -25,25 +25,24 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("🦅 لوحة القيادة السيادية - محرك التتبع الفوري")
+st.title("🦅 لوحة القيادة السيادية - محرك الإرسال المستقر")
 st.markdown("---")
 
 ACCOUNTS_FILE = "accounts.csv"
 STATE_FILE = "last_index.txt"
 LOG_FILE = "sent_stats.csv"
-FOLLOWUP_FILE = "pending_followups.csv"
 
-# --- القائمة الجانبية للتحكم اليدوي المريح ---
+# --- القائمة الجانبية للتحكم ---
 st.sidebar.header("⚙️ إعدادات الإرسال الفوري")
 industry_keyword = st.sidebar.text_input("مجال البحث والفلترة", value="SaaS startup contact email")
-batch_size = st.sidebar.slider("حجم الدفعة", min_value=5, max_value=50, value=15)
-max_threads = st.sidebar.slider("خطوط الإرسال المتوازية (Threads)", min_value=1, max_value=10, value=3)
+batch_size = st.sidebar.slider("حجم الدفعة", min_value=5, max_value=30, value=10)
+max_threads = st.sidebar.slider("خطوط الإرسال المتوازية (Threads)", min_value=1, max_value=5, value=2)
 
 ai_personalization = st.sidebar.checkbox("✨ تفعيل صياغة الرسائل بالذكاء الاصطناعي", value=True)
 enable_email_verifier = st.sidebar.checkbox("🛡️ تفعيل فحص وتطهير الإيميلات", value=True)
 
-# زرار التشغيل اليدوي الواضح جداً
-start_now = st.sidebar.button("🚀 بدء الإرسال الآن (عرض تفصيلي)", type="primary")
+# زرار التشغيل اليدوي
+start_now = st.sidebar.button("🚀 بدء الإرسال الآن", type="primary")
 
 subject_template = st.sidebar.text_input("عنوان الرسالة", value="Quick question regarding growth & scaling")
 custom_offer = st.text_area(
@@ -139,20 +138,18 @@ def send_single_email(sender, password, recipient, subject, body):
     except Exception as e:
         return False, f"❌ فشل إرسال الإيميل إلى **{recipient}** من الحساب `{sender}`"
 
-# --- واجهة العرض ---
-st.subheader("📋 لوحة العمليات والبث الحي للإرسال الفوري")
-console_container = st.empty()
+# --- واجهة العمليات الأساسية ---
+st.subheader("📋 تقرير حالة الحملة والإرسال")
 
-# --- عند الضغط على زر التشغيل اليدوي ---
 if start_now:
     if not os.path.exists(ACCOUNTS_FILE):
-        st.error("❌ ملف accounts.csv غير موجود!")
+        st.error("❌ ملف accounts.csv غير موجود على السيرفر!")
     else:
-        with st.spinner("🔍 جاري البحث عن الشركات وجلب الإيميلات..."):
+        with st.spinner("🔍 جارٍ البحث عن الشركات وجلب الإيميلات المستهدفة..."):
             leads = search_leads(industry_keyword, batch_size)
         
         if not leads.empty:
-            st.success(f"✨ تم العثور على {len(leads)} شركة، جارٍ بدء الضخ الآن...")
+            st.success(f"✨ تم العثور على {len(leads)} شركة، جارٍ بدء الضخ المستقر...")
             
             accounts_df = pd.read_csv(ACCOUNTS_FILE, encoding='utf-8', on_bad_lines='skip')
             accounts_df.columns = accounts_df.columns.str.strip().str.lower()
@@ -173,27 +170,37 @@ if start_now:
                 tasks.append((sender, pwd, target, subject_template, body))
             
             sent_in_batch = 0
-            live_logs = ["🚀 بدء إرسال الحملة... يرجى الانتظار لحين اكتمال الدفعة:\n"]
+            live_logs = []
+            
+            # تنفيذ الإرسال بشكل آمن ومستقر بدون أخطاء واجهة المستخدم
+            progress_bar = st.progress(0)
+            status_text = st.empty()
             
             with ThreadPoolExecutor(max_workers=max_threads) as executor:
-                futures = [executor.submit(send_single_email, t[0], t[1], t[2], t[3], t[4]) for t in tasks]
+                futures = {executor.submit(send_single_email, t[0], t[1], t[2], t[3], t[4]): t for t in tasks}
+                completed_count = 0
+                
                 for future in as_completed(futures):
                     success, message = future.result()
                     if success:
                         sent_in_batch += 1
                     live_logs.append(message)
+                    completed_count += 1
                     
-                    # تحديث الشاشة مباشرة بكل خطوة وإيميل بيتبعث
-                    with console_container.container():
-                        st.markdown("### 📊 السجل الحي للحملة:")
-                        for log in live_logs[-15:]:
-                            st.write(log)
+                    # تحديث شريط التقدم بأمان
+                    progress_bar.progress(completed_count / len(tasks))
+                    status_text.text(f"⏳ تم معالجة {completed_count} من {len(tasks)} إيميل...")
             
             save_current_account_index(current_idx)
             log_sent_metric(sent_in_batch)
             
-            st.success(completed_msg := f"🎉 تم الانتهاء بنجاح من إرسال {sent_in_batch} إيميل قدام عينك!")
+            st.success(f"🎉 تم الانتهاء بنجاح من إرسال دفعة مكونة من {sent_in_batch} إيميل!")
+            
+            # عرض السجل النهائي مرتباً وواضحاً
+            st.markdown("### 📝 سجل الإرسال النهائي لهذه الدفعة:")
+            for log in live_logs:
+                st.write(log)
         else:
             st.warning("⚠️ لم يتم العثور على إيميلات جديدة في هذه الدفعة، جرب تغيير كلمة البحث في القائمة الجانبية.")
 else:
-    st.info("ℹ️ اضغط على زر **'بدء الإرسال الآن'** في القائمة الجانبية لتنفيذ الدفعة ورؤية تفاصيل الحسابات والإيميلات مباشرة هنا.")
+    st.info("ℹ️ اضغط على زر **'بدء الإرسال الآن'** في القائمة الجانبية لتنفيذ الحملة بشكل مستقر وسريع.")
